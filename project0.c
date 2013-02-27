@@ -11,16 +11,33 @@
 #include "driverlib/pin_map.h"
 #include "inc/lm4f120h5qr.h"
 #include <stdint.h>
-#include "softPwm.h"
+#include "softPwm.h" //From here: https://github.com/arcadien/pwm_test_stellpad1/tree/master/lab_project
+#include "I2C_Stellaris_API.h" //From here: http://e2e.ti.com/support/microcontrollers/stellaris_arm/f/471/t/235926.aspx
 
 #define DIN GPIO_PIN_1	//These are all on port F.
 #define CLK GPIO_PIN_2	//They correspond to the 3 control wires going to the MAX6921.
 #define LOAD GPIO_PIN_3
 
-#define SECONDPULSE GPIO_PIN_6	//These are all on port B. SECONDPULSE is connected to the 1Hz SQW output of the ds1307
-#define SMPS_PWM GPIO_PIN_2		//This pin is connected to the SMPS mosfet gate for switching.
+#define SECONDPULSE GPIO_PIN_6	//Port C. SECONDPULSE is connected to the 1Hz SQW output of the ds1307
+#define SMPS_PWM GPIO_PIN_2		//Port B. This pin is connected to the SMPS mosfet gate for switching.
 
 #define dutyCycle 40	//This is trial and error open-loop control - hacky but works well.
+#define DS1307ADDRESS 0xD0
+
+#define H1 2 //The time to set, with the time being H1,H2:M1,M2:S1,S2
+#define H2 3
+#define M1 1
+#define M2 2
+#define S1 1
+#define S2 1
+#define SETTIME //Comment this line out when you have set the time once.
+
+//   Time-setting procedure:
+// - Set the correct values in H1,H2....,S2 for a time a couple of minutes in the future.
+// - Upload the compiled program to the launchpad.
+// - Press reset when the current time is what you set it to.
+// - WITHOUT REMOVING POWER, comment out the SETTIME define, recompile, and upload.
+// - The clock should now keep time on its own, just repeat this process when the clocks change.
 
 void send_VFD(int digit, int number);
 void rest();
@@ -56,12 +73,25 @@ void update_VFD()
 
 void getDS1307time()
 {
-	/*
-	blah do i2c shit;
-	*/
-	hour = 18;
+	unsigned long temp;
+	I2CSetup(I2C2_MASTER_BASE, false); //Port E: pin 4 is SCL, pin 5 is SDA. The false value sets the speed to 100kHz (I think)
+#ifdef SETTIME
+	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 0, (S1<<3)|S2); //set seconds
+	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 1, (M1<<3)|M2); //set minutes
+	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 2, (H1<<3)|(H2)); //set 24 hour bit and hours
+	//Don't bother setting days/months/years
+	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 7, (1<<4)); //sets up SQW output at 1Hz
+#endif
+	temp = I2CRegRead(I2C2_MASTER_BASE, DS1307ADDRESS, 0);
+	second = (temp&0x00001111)+10*((temp>>4)&0x00000111); //Messy bit manipulations to extract the seconds.
+	temp = I2CRegRead(I2C2_MASTER_BASE, DS1307ADDRESS, 1);
+	minute = (temp&0x00001111)+10*((temp>>4)&0x00000111);
+	temp = I2CRegRead(I2C2_MASTER_BASE, DS1307ADDRESS, 2);
+	hour = (temp&0x00001111)+10*((temp>>4)&0x00000011);
+
+/*	hour = 18;
 	minute = 36;
-	second=21;
+	second=21;*/
 
 	numbers[0]=hour/10;
 	numbers[1]=hour%10;

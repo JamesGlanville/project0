@@ -11,6 +11,7 @@ $(GEN_CMDS__FLAG) \
 "./startup_ccs.obj" \
 "./softPwm.obj" \
 "./project0.obj" \
+"./I2C_Stellaris_API.obj" \
 -l"libc.a" \
 -l"C:/StellarisWare/boards/ek-lm4f120xl/project0/ccs/../../../../driverlib/ccs-cm4f/Debug/driverlib-cm4f.lib" \
 "../project0_ccs.cmd" \
@@ -126,8 +127,8 @@ project0.out: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 # Other Targets
 clean:
 	-$(RM) $(TMS470_EXECUTABLE_OUTPUTS__QUOTED) "project0.out"
-	-$(RM) "project0.pp" "softPwm.pp" "startup_ccs.pp" 
-	-$(RM) "project0.obj" "softPwm.obj" "startup_ccs.obj" 
+	-$(RM) "I2C_Stellaris_API.pp" "project0.pp" "softPwm.pp" "startup_ccs.pp" 
+	-$(RM) "I2C_Stellaris_API.obj" "project0.obj" "softPwm.obj" "startup_ccs.obj" 
 	-@echo 'Finished clean'
 	-@echo ' '
 

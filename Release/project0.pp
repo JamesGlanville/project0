@@ -15,6 +15,7 @@ project0.obj: C:/StellarisWare/driverlib/timer.h
 project0.obj: C:/StellarisWare/inc/lm4f120h5qr.h
 project0.obj: C:/ti/ccsv5/tools/compiler/tms470_4.9.5/include/stdint.h
 project0.obj: ../softPwm.h
+project0.obj: ../I2C_Stellaris_API.h
 
 ../project0.c: 
 C:/StellarisWare/inc/hw_types.h: 
@@ -31,3 +32,4 @@ C:/StellarisWare/driverlib/timer.h:
 C:/StellarisWare/inc/lm4f120h5qr.h: 
 C:/ti/ccsv5/tools/compiler/tms470_4.9.5/include/stdint.h: 
 ../softPwm.h: 
+../I2C_Stellaris_API.h: 
