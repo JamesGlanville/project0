@@ -22,18 +22,19 @@
 #define SMPS_PWM GPIO_PIN_2		//Port B. This pin is connected to the SMPS mosfet gate for switching.
 
 #define dutyCycle 40	//This is trial and error open-loop control - hacky but works well.
-#define DS1307ADDRESS 0xD0
+#define DS1307ADDRESS 0x68 //The i2c slave address of the DS1307
 
-#define H1 2 //The time to set, with the time being H1,H2:M1,M2:S1,S2
+#define H1 2 //The time to set, with the time being H1,H2:M1,M2:S1,S2 so this time is 23:02:00
 #define H2 3
-#define M1 1
+#define M1 0
 #define M2 2
-#define S1 1
-#define S2 1
-#define SETTIME //Comment this line out when you have set the time once.
+#define S1 0
+#define S2 0
+//#define SETTIME //Comment this line out when you have set the time once.
 
 //   Time-setting procedure:
 // - Set the correct values in H1,H2....,S2 for a time a couple of minutes in the future.
+// - Uncomment SETTIME and compile.
 // - Upload the compiled program to the launchpad.
 // - Press reset when the current time is what you set it to.
 // - WITHOUT REMOVING POWER, comment out the SETTIME define, recompile, and upload.
@@ -45,7 +46,7 @@ void update_VFD();
 
 unsigned long grid[6]={1<<0,1<<3,1<<9,1<<2,1<<13,1<<1};				//0'th digit, 1st digit... etc
 unsigned long segments[10]={1<<11|1<<17|1<<6|1<<4|1<<19|1<<10,		//0		There might be a nicer way to do this, this works.
-							1<<4|1<<10,								//1
+							1<<4|1<<10,								//1		This depends on how you have wired up your VFD
 							1<<11|1<<4|1<<6|1<<4|1<<7|1<<19,		//2
 							1<<11|1<<4|1<<6|1<<4|1<<7|1<<10,		//3
 							1<<17|1<<4|1<<7|1<<10,					//4
@@ -76,22 +77,19 @@ void getDS1307time()
 	unsigned long temp;
 	I2CSetup(I2C2_MASTER_BASE, false); //Port E: pin 4 is SCL, pin 5 is SDA. The false value sets the speed to 100kHz (I think)
 #ifdef SETTIME
-	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 0, (S1<<3)|S2); //set seconds
-	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 1, (M1<<3)|M2); //set minutes
-	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 2, (H1<<3)|(H2)); //set 24 hour bit and hours
-	//Don't bother setting days/months/years
-	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 7, (1<<4)); //sets up SQW output at 1Hz
+	SysCtlDelay(1000);
+	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 0, (S1<<4)|S2); //set seconds - push the first digit left 4 bits into bits 6,5,4 (see datasheet), then OR with S2 which is already in the right place bit-wise.
+	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 1, (M1<<4)|M2); //set minutes
+	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 2, (H1<<4)|H2); //set 24 hour bit and hours
+	//Don't bother setting days/months/years - should be easy to work out what to do from the datasheet.
+	I2CRegWrite(I2C2_MASTER_BASE, DS1307ADDRESS, 7, 0x90); //sets up SQW output at 1Hz 0x90 = 10010000. The first bit (bit 7) is actually unneeded. The 4th (bit 4) turns on the SQW output.
 #endif
 	temp = I2CRegRead(I2C2_MASTER_BASE, DS1307ADDRESS, 0);
-	second = (temp&0x00001111)+10*((temp>>4)&0x00000111); //Messy bit manipulations to extract the seconds.
+	second = (temp&0x0F)+10*((temp>>4)&0x07); //Messy bit manipulations to extract the seconds. 0x0F = 00001111, so OR'ing the temp value with it gives you only the last four bits.
 	temp = I2CRegRead(I2C2_MASTER_BASE, DS1307ADDRESS, 1);
-	minute = (temp&0x00001111)+10*((temp>>4)&0x00000111);
+	minute = (temp&0x0F)+10*((temp>>4)&0x07);
 	temp = I2CRegRead(I2C2_MASTER_BASE, DS1307ADDRESS, 2);
-	hour = (temp&0x00001111)+10*((temp>>4)&0x00000011);
-
-/*	hour = 18;
-	minute = 36;
-	second=21;*/
+	hour = (temp&0x0F)+10*((temp>>4)&0x03);
 
 	numbers[0]=hour/10;
 	numbers[1]=hour%10;
@@ -106,7 +104,7 @@ void NewSecond()
 	GPIOPinIntClear(GPIO_PORTC_BASE,SECONDPULSE); //Clears interrupt.
 
 	second++;
-	if (second	== 60){second	= 0; minute++;	}
+	if (second	== 60){second	= 0; minute++;	} //Simple code to get the time to work correctly.
 	if (minute	== 60){minute	= 0; hour++;	}
 	if (hour	== 24){hour		= 0;			}
 	numbers[0]=hour/10; //numbers[] is an integer array, and the calculations are always rounded down so this works.
@@ -119,12 +117,12 @@ void NewSecond()
 
 void send_VFD(int digit, int number)
 {
-	long data=0; //This will become the blob of data that is pushed to the MAXX6921
+	long data=0; //This will become the blob of data that is pushed to the MAX6921
 	int i;
 	data |= grid[digit];		//the grid bit is OR'ed to add it to data.
 	data |= segments[number];	//Likewise with the segments.
 
-	rest();
+	rest(); //pause for a bit
 	GPIO_PORTF_DATA_R &= ~LOAD; //Pulls LOAD low. This should really use a higher level function for neatness.
 	rest();
 	GPIO_PORTF_DATA_R =0; //Pulls the whole of port F low (why?!?)
@@ -139,12 +137,11 @@ void send_VFD(int digit, int number)
 		GPIO_PORTF_DATA_R |= CLK; //Pulls CLK high.
 		rest();
 	}
-	rest();
+	rest(); //Not sure why I need more than 1 here.
 	rest();
 	rest();
 	rest();
 	GPIO_PORTF_DATA_R |=LOAD; //LOAD goes high.
-	//SysCtlDelay(10000000);
 }
 
 void rest()
@@ -168,22 +165,23 @@ main(void)
 	GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, DIN | LOAD | CLK);
 	GPIOPinTypeGPIOInput(GPIO_PORTC_BASE,SECONDPULSE);
 
+    getDS1307time(); //Grab the current time, before interrupts start.
+
 	GPIOPinIntClear(GPIO_PORTC_BASE,0xFF); //Clear all interrupts from port C.
 	GPIOPortIntRegister(GPIO_PORTC_BASE, &NewSecond); //Registers NewSecond() as the interrupt handler.
-	GPIOPadConfigSet(GPIO_PORTC_BASE, SECONDPULSE, GPIO_STRENGTH_2MA,GPIO_PIN_TYPE_STD_WPU); //Enables a weak (2mA) pullup on the pin.
+	GPIOPadConfigSet(GPIO_PORTC_BASE, SECONDPULSE, GPIO_STRENGTH_2MA,GPIO_PIN_TYPE_STD_WPU); //Enables a weak (2mA) pullup on the pin. This is needed as the SQW output is open-drain.
 	GPIOIntTypeSet(GPIO_PORTC_BASE, SECONDPULSE, GPIO_FALLING_EDGE); //Sets the interrupt to trigger on a falling edge.
 	GPIOPinIntEnable(GPIO_PORTC_BASE,SECONDPULSE); //Enables the interrupt.
 	IntEnable(INT_GPIOC); //Enables the port interrupt.
     IntMasterEnable(); //Enables all interrupts.
 
 	// clear any existing state
-	GPIOPinWrite(GPIO_PORTB_BASE, SMPS_PWM, 0);
+	GPIOPinWrite(GPIO_PORTB_BASE, SMPS_PWM, 0); //Don't think this matters much since it's about to start PWM'ing.
 
 	softPwmInit(); //Sets up the pwm (see softPwm.c)
 
 	unsigned long base_freq = 6000; // 6kHz pwm. I have no idea why, but higher frequencies resulted in a lower output voltage, which makes no sense.
 
-    getDS1307time(); //Grab the current time
     softPwmConfig(GPIO_PORTB_BASE, SMPS_PWM, base_freq, dutyCycle); //Starts the SMPS PWM.
 
     while(1)
