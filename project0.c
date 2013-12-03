@@ -24,10 +24,10 @@
 #define dutyCycle 40	//This is trial and error open-loop control - hacky but works well.
 #define DS1307ADDRESS 0x68 //The i2c slave address of the DS1307
 
-#define H1 2 //The time to set, with the time being H1,H2:M1,M2:S1,S2 so this time is 23:02:00
-#define H2 3
+#define H1 0 //The time to set, with the time being H1,H2:M1,M2:S1,S2 so this time is 23:02:00
+#define H2 1
 #define M1 0
-#define M2 2
+#define M2 8
 #define S1 0
 #define S2 0
 //#define SETTIME //Comment this line out when you have set the time once.
@@ -55,6 +55,27 @@ unsigned long segments[10]={1<<11|1<<17|1<<6|1<<4|1<<19|1<<10,		//0		There might
 							1<<4|1<<6|1<<10,						//7
 							1<<11|1<<17|1<<4|1<<6|1<<7|1<<19|1<<10,	//8
 							1<<4|1<<6|1<<7|1<<10|1<<17};			//9
+
+unsigned long segments_hackaday[19]={	1<<4|1<<10|1<<17|1<<19|1<<7, //H
+										1<<17|1<<19|1<<7|1<<11, //t
+										1<<17|1<<19|1<<7|1<<11, //t
+										1<<17|1<<19|1<<6|1<<7|1<<4, //P
+										1<<6|1<<11, //:
+										1<<19|1<<7|1<<4, // /
+										1<<19|1<<7|1<<4, // /
+										1<<4|1<<10|1<<17|1<<19|1<<7, //H
+										1<<17|1<<4|1<<6|1<<7|1<<19|1<<10, //A
+										1<<6|1<<17|1<<19|1<<11, //C
+										1<<17|1<<6|1<<7|1<<19|1<<10, //k
+										1<<17|1<<4|1<<6|1<<7|1<<19|1<<10, //A
+										1<<7|1<<19|1<<11|1<<10|1<<4, //d
+										1<<17|1<<4|1<<6|1<<7|1<<19|1<<10, //A
+										1<<11|1<<17|1<<4|1<<7|1<<10, //y
+										1<<11, //_
+										1<<6|1<<17|1<<19|1<<11, //C
+										1<<11|1<<17|1<<6|1<<4|1<<19|1<<10, //O
+										1<<11|1<<17|1<<6|1<<7|1<<19 //M sideways
+};
 
 volatile int hour; //These must all be marked volatile as the NewSecond interrupt will use them.
 volatile int minute;
@@ -183,6 +204,14 @@ main(void)
 	unsigned long base_freq = 6000; // 6kHz pwm. I have no idea why, but higher frequencies resulted in a lower output voltage, which makes no sense.
 
     softPwmConfig(GPIO_PORTB_BASE, SMPS_PWM, base_freq, dutyCycle); //Starts the SMPS PWM.
+
+    if(second==37)
+    {
+    	while(1)
+    	{
+    		update_HAD();
+    	}
+    }
 
     while(1)
     {
