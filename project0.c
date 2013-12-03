@@ -23,6 +23,7 @@
 
 #define dutyCycle 40	//This is trial and error open-loop control - hacky but works well.
 #define DS1307ADDRESS 0x68 //The i2c slave address of the DS1307
+#define HAD_LENGTH	19
 
 #define H1 0 //The time to set, with the time being H1,H2:M1,M2:S1,S2 so this time is 23:02:00
 #define H2 1
@@ -56,7 +57,7 @@ unsigned long segments[10]={1<<11|1<<17|1<<6|1<<4|1<<19|1<<10,		//0		There might
 							1<<11|1<<17|1<<4|1<<6|1<<7|1<<19|1<<10,	//8
 							1<<4|1<<6|1<<7|1<<10|1<<17};			//9
 
-unsigned long segments_hackaday[19]={	1<<4|1<<10|1<<17|1<<19|1<<7, //H
+unsigned long segments_hackaday[HAD_LENGTH]={	1<<4|1<<10|1<<17|1<<19|1<<7, //H
 										1<<17|1<<19|1<<7|1<<11, //t
 										1<<17|1<<19|1<<7|1<<11, //t
 										1<<17|1<<19|1<<6|1<<7|1<<4, //P
@@ -91,6 +92,29 @@ void update_VFD()
 		send_VFD(i, numbers[i]);
 	}
 
+}
+
+void update_HAD()
+{
+	int i;
+	int j;
+	while(1)
+	{
+		for (i=0;i<=13;i++)
+		{
+			for(j=0;j<6000;j++)
+			{
+				send_VFD(j%6,10+i+j%6);
+			}
+		}
+		for (i=13;i>=0;i--)
+		{
+			for(j=0;j<6000;j++)
+			{
+				send_VFD(j%6,10+i+j%6);
+			}
+		}
+	}
 }
 
 void getDS1307time()
@@ -136,13 +160,19 @@ void NewSecond()
 	numbers[5]=second%10;
 }
 
-void send_VFD(int digit, int number)
+void send_VFD(int digit, int number) //numbers 10->29 are http://hackaday.com
 {
 	long data=0; //This will become the blob of data that is pushed to the MAX6921
 	int i;
 	data |= grid[digit];		//the grid bit is OR'ed to add it to data.
-	data |= segments[number];	//Likewise with the segments.
-
+	if(number<10)
+	{
+		data |= segments[number];	//Likewise with the segments.
+	}
+	else
+	{
+		data |= segments_hackaday[number-10];
+	}
 	rest(); //pause for a bit
 	GPIO_PORTF_DATA_R &= ~LOAD; //Pulls LOAD low. This should really use a higher level function for neatness.
 	rest();
@@ -207,10 +237,7 @@ main(void)
 
     if(second==37)
     {
-    	while(1)
-    	{
-    		update_HAD();
-    	}
+    	update_HAD();
     }
 
     while(1)
